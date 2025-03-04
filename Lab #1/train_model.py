@@ -1,29 +1,33 @@
 import os
 import torch
-from torch.utils.data import Dataset
-from torchvision.io import read_image
+from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader
-from torch import nn
 import lightning as L
+from torch.utils.tensorboard import SummaryWriter
 from torchvision.models import AlexNet_Weights, EfficientNet_B0_Weights
 
 from dataset import MyDataset
 from lightning_model import LModel
-from models import my_alexnet, my_efficient_net
+from models import my_alexnet, my_efficient_net, MyModel
 
 
 def train_test_model(model, weights, epochs, batch_size, data_path):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(device)
 
+    if weights is not None:
+        transform = weights.transforms()
+    else:
+        transform = None
+
     train_data = MyDataset(os.path.join(data_path, "train"),
-                           transform=weights.transforms())
+                           transform=transform)
     labels_names = train_data.get_labels()
     valid_data = MyDataset(os.path.join(data_path, "validation"),
-                           transform=weights.transforms(),
+                           transform=transform,
                            labels=labels_names)
     test_data = MyDataset(os.path.join(data_path, "test"),
-                          transform=weights.transforms(),
+                          transform=transform,
                           labels=labels_names)
 
     train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=NUM_WORKERS,
@@ -36,8 +40,9 @@ def train_test_model(model, weights, epochs, batch_size, data_path):
     # num_classes = len(labels_names)
     model = model(len(labels_names), weights)
 
+    logger = TensorBoardLogger(save_dir="logs", name=model.__class__.__name__)
     lit_model = LModel(model, labels_names, device)
-    trainer = L.Trainer(max_epochs=epochs)
+    trainer = L.Trainer(max_epochs=epochs, logger=logger)
 
     trainer.fit(model=lit_model, train_dataloaders=train_dataloader, val_dataloaders=valid_dataloader)
     trainer.test(model=lit_model, dataloaders=test_dataloader)
@@ -52,6 +57,7 @@ if __name__ == '__main__':
 
     torch.set_float32_matmul_precision('high')
 
-    train_test_model(my_efficient_net, EfficientNet_B0_Weights.IMAGENET1K_V1, EPOCHS, BATCH_SIZE, DATA_PATH)
+    # train_test_model(my_efficient_net, EfficientNet_B0_Weights.IMAGENET1K_V1, EPOCHS, BATCH_SIZE, DATA_PATH)
     train_test_model(my_alexnet, AlexNet_Weights.IMAGENET1K_V1, EPOCHS, BATCH_SIZE, DATA_PATH)
+    # train_test_model(MyModel, None, EPOCHS, BATCH_SIZE, DATA_PATH)
 

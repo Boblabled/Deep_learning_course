@@ -1,14 +1,6 @@
 import matplotlib.pyplot as plt
 from tensorboard.backend.event_processing import event_accumulator
 
-# Извлечение данных
-def get_scalar_data(tag):
-    """Извлекает данные для конкретной метрики."""
-    try:
-        return [(event.step, event.value) for event in ea.Scalars(tag)]
-    except KeyError:
-        print(f"Метрика {tag} не найдена в логах.")
-        return []
 
 def make_metrics_plot(ea):
     plt.figure(figsize=(14, 10))
@@ -18,10 +10,12 @@ def make_metrics_plot(ea):
     draw_plot((2, 2, 4), ea, "MulticlassF1Score/train", "Training F1-score", "F1-score")
 
     plt.tight_layout()
+    plt.savefig("metrics.png")
     plt.show()
 
 def draw_plot(i, ea, label, title, ylabel):
     data = [event.value for event in ea.Scalars(label)]
+    print(label, len(data))
     plt.subplot(*i)
     plt.plot(range(0, len(data)), data, label="MulticlassAccuracy/valid")
     plt.xlabel("Epoch")
@@ -32,16 +26,16 @@ def draw_plot(i, ea, label, title, ylabel):
 
 
 if __name__ == '__main__':
-    PATH = "lightning_logs/version_13/events.out.tfevents.1740933871.yo"
+    PATH = r"logs/EfficientNet/version_1\events.out.tfevents.1741028224.yo.16948.0"
 
     # Загрузка данных TensorBoard
     ea = event_accumulator.EventAccumulator(PATH)
     ea.Reload()
-    print(ea.Scalars("train_loss"))
 
     make_metrics_plot(ea)
 
     draw_plot((1, 1, 1), ea, "train_loss", "Training Loss", "Loss")
+    plt.savefig("train_loss.png")
     plt.show()
 
     # # Отдельный график для train_loss

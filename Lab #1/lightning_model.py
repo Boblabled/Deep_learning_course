@@ -1,6 +1,10 @@
+import os
+
 import lightning as L
 from matplotlib import pyplot as plt
+from pytorch_lightning.loggers import TensorBoardLogger
 from sklearn.metrics import accuracy_score
+from tensorboard.backend.event_processing import event_accumulator
 from torchmetrics import MetricCollection
 from torchmetrics.classification import MulticlassAccuracy, MulticlassF1Score
 from torch import nn
@@ -22,8 +26,26 @@ class LModel(L.LightningModule):
         self.__valid_metrics = self.__metrics.clone(postfix="/valid")
         self.__best_val_accuracy = 0.0
 
+        self.__one_epoch_loss = []
         self.__all_pred, self.__all_labels, self.__all_images = [], [], []
         self.__class_names = {v: k for k, v in labels_names.items()}
+
+        # self.__save_path = self.init_save_path()
+
+    def init_save_path(self) -> str:
+        save_path = self.__model.__class__.__name__
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
+        version = 0
+        while os.path.exists(os.path.join(save_path, f"version_{version}")):
+            print(os.path.join(save_path, f"version_{version}"))
+            version += 1
+
+        save_path = os.path.join(save_path, f"version_{version}")
+        os.makedirs(save_path)
+
+        return save_path
 
     def configure_optimizers(self):
         optimizer = torch.optim.SGD(self.parameters(), lr=self.__learning_rate, momentum=0.9)
@@ -37,10 +59,15 @@ class LModel(L.LightningModule):
         pred = self.__model(x.to(self.__device))
         loss = self.__criterion(pred, y.to(self.__device))
         self.__train_metrics.update(pred, y.to(self.__device))
-        self.log("train_loss", loss, prog_bar=True)
+        self.__one_epoch_loss.append(loss)
         return loss
 
     def on_train_epoch_end(self):
+        loss = sum(self.__one_epoch_loss) / len(self.__one_epoch_loss)
+        self.log("train_loss", loss, prog_bar=True)
+        print("train_loss: ", loss)
+        self.__one_epoch_loss.clear()
+
         self.log_dict(self.__train_metrics.compute())
         self.__train_metrics.reset()
 
@@ -60,7 +87,8 @@ class LModel(L.LightningModule):
 
         if metrics['MulticlassAccuracy/valid'] > self.__best_val_accuracy:
             self.__best_val_accuracy = metrics['MulticlassAccuracy/valid']
-            torch.save(self.__model.state_dict(), f'{self.__model.__class__.__name__}.pth')
+            torch.save(self.__model.state_dict(),
+                    os.path.join(self.logger.log_dir, f"{self.__model.__class__.__name__}_weights.pth"))
             print(f"\nNew best model saved with accuracy: {self.__best_val_accuracy}")
 
     def on_fit_start(self):
@@ -76,13 +104,23 @@ class LModel(L.LightningModule):
         self.__all_labels.extend(y.cpu().numpy())
         self.__all_images.extend(x.cpu())
         return loss
-        # return {'pred': pred, 'labels': y}
 
     def on_test_end(self):
         # Вычисление точности
-        accuracy = accuracy_score(self.all_labels, self.all_preds)
+        accuracy = accuracy_score(self.__all_labels, self.__all_pred)
         print(f"Test accuracy: {accuracy * 100:.2f}%")
-        self.visualize_predictions(self.__all_images, self.__all_labels, self.__all_pred, self.__class_names)
+        self.visualize_predictions(self.__all_images, self.__all_labels, self.__all_pred, self.__class_names,
+                                   save_path=os.path.join(self.logger.log_dir, f"predictions.png"))
+
+        event_file = [f for f in os.listdir(self.logger.log_dir) if "events.out.tfevents" in f][0]
+        event_path = os.path.join(self.logger.log_dir, event_file)
+        ea = event_accumulator.EventAccumulator(event_path)
+        ea.Reload()
+
+        self.make_metrics_plot(ea)
+        self.draw_plot((1, 1, 1), ea, "train_loss", "Training Loss", "Loss")
+        plt.savefig(os.path.join(self.logger.log_dir, "train_loss.png"))
+        plt.show()
 
     def visualize_predictions(self, images, labels, predictions, class_names, save_path="predictions.png"):
         plt.figure(figsize=(8, 8))
@@ -99,4 +137,25 @@ class LModel(L.LightningModule):
         plt.tight_layout()
         plt.savefig(save_path)
         plt.show()
+
+    def make_metrics_plot(self, ea):
+        plt.figure(figsize=(14, 10))
+        self.draw_plot((2, 2, 1), ea, "MulticlassAccuracy/valid", "Validation Accuracy", "Accuracy")
+        self.draw_plot((2, 2, 2), ea, "MulticlassF1Score/valid", "Validation F1-score", "F1-score")
+        self.draw_plot((2, 2, 3), ea, "MulticlassAccuracy/train", "Training Accuracy", "Accuracy")
+        self.draw_plot((2, 2, 4), ea, "MulticlassF1Score/train", "Training F1-score", "F1-score")
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.logger.log_dir, "metrics.png"))
+        plt.show()
+
+    def draw_plot(self, i, ea, label, title, ylabel):
+        data = [event.value for event in ea.Scalars(label)]
+        plt.subplot(*i)
+        plt.plot(range(0, len(data)), data, label="MulticlassAccuracy/valid")
+        plt.xlabel("Epoch")
+        plt.ylabel(ylabel)
+        plt.title(title)
+        plt.legend()
+        plt.grid()
 
