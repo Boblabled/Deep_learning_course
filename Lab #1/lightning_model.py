@@ -2,7 +2,6 @@ import os
 
 import lightning as L
 from matplotlib import pyplot as plt
-from pytorch_lightning.loggers import TensorBoardLogger
 from sklearn.metrics import accuracy_score
 from tensorboard.backend.event_processing import event_accumulator
 from torchmetrics import MetricCollection
@@ -19,8 +18,8 @@ class LModel(L.LightningModule):
         self.__criterion = nn.CrossEntropyLoss()
 
         num_classes = len(labels_names)
-        self.__metrics = MetricCollection([MulticlassAccuracy(num_classes=num_classes, ),
-                                           MulticlassF1Score(num_classes=num_classes,)])
+        self.__metrics = MetricCollection([MulticlassAccuracy(num_classes=num_classes),
+                                           MulticlassF1Score(num_classes=num_classes)])
 
         self.__train_metrics = self.__metrics.clone(postfix="/train")
         self.__valid_metrics = self.__metrics.clone(postfix="/valid")
@@ -65,7 +64,7 @@ class LModel(L.LightningModule):
     def on_train_epoch_end(self):
         loss = sum(self.__one_epoch_loss) / len(self.__one_epoch_loss)
         self.log("train_loss", loss, prog_bar=True)
-        print("train_loss: ", loss)
+        print(" train_loss: ", float(loss))
         self.__one_epoch_loss.clear()
 
         self.log_dict(self.__train_metrics.compute())
@@ -84,12 +83,12 @@ class LModel(L.LightningModule):
         metrics = self.__valid_metrics.compute()
         self.log_dict(metrics)
         self.__valid_metrics.reset()
-
+        print(f"\nAccuracy: {metrics['MulticlassAccuracy/valid']}")
         if metrics['MulticlassAccuracy/valid'] > self.__best_val_accuracy:
             self.__best_val_accuracy = metrics['MulticlassAccuracy/valid']
             torch.save(self.__model.state_dict(),
                     os.path.join(self.logger.log_dir, f"{self.__model.__class__.__name__}_weights.pth"))
-            print(f"\nNew best model saved with accuracy: {self.__best_val_accuracy}")
+            print(f"\nNew best model saved")
 
     def on_fit_start(self):
         # Инициализация лучшей точности в начале обучения

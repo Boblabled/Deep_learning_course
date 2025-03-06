@@ -1,0 +1,10 @@
+torch~=2.6.0+cu118
+torchvision~=0.21.0+cu118
+matplotlib~=3.9.2
+tensorboard~=2.19.0
+lightning~=2.5.1rc0
+pytorch-lightning~=2.5.0.post0
+scikit-learn~=1.5.2
+torchmetrics~=1.6.2
+ultralytics~=8.3.84
+roboflow~=1.1.54
