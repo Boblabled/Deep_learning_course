@@ -33,7 +33,6 @@ class MyModel(nn.Module):
 
 def my_efficient_net(num_classes, weights):
     model = efficientnet_b0(weights = weights)
-    # model.features.requires_grad = False
     num_features = model.classifier[1].in_features
     model.classifier[1] = nn.Linear(num_features, num_classes)
     model.classifier.append(nn.Softmax(dim=1))
