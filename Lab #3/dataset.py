@@ -52,19 +52,82 @@ class LetterDictionary:
         return len(self.index2letter)
 
 
+# class WordDictionary:
+#     def __init__(self):
+#         self.index2word = {0: " "}
+#         self.word2index = {letter: idx for idx, letter in self.index2word.items()}
+#         self.word2count = {letter: 0 for idx, letter in self.index2word.items()}
+#         self.word_index = len(self.index2word)
+#         self.delimiter = " "
+#
+#     def add_line(self, sentence):
+#         # words = re.sub(r"([^a-zA-Zа-яА-Яеё])", r" \1 ", sentence.lower().strip())
+#         words = re.sub(r'(?<=[а-яА-Яa-zA-ZёЁ])([.,!?;:])', r' \1', sentence.lower().strip())
+#         for i, word in enumerate(words.split()):
+#             if re.match(r"^[а-яА-Яa-zA-ZёЁ\-]+$", word) and i > 0:
+#                 self.add_word(" ")
+#             self.add_word(word)
+#         self.add_word("\n")
+#
+#     def add_word(self, word):
+#         if word not in self.word2index:
+#             self.word2index[word] = self.word_index
+#             self.word2count[word] = 1
+#             self.index2word[self.word_index] = word
+#             self.word_index += 1
+#         else:
+#             self.word2count[word] += 1
+#
+#     def add_data(self, path):
+#         with open(path, 'r', encoding='utf-8') as file:
+#             for line in file:
+#                 self.add_line(line)
+#
+#     def save_dict(self, path="dict.txt"):
+#         with open(path, "w", encoding='utf-8') as file:
+#             for idx, letter in self.index2word.items():
+#                 file.write(f'{idx}{self.delimiter}{letter}\n')
+#
+#     def convert_line_to_index(self, line: str) -> list:
+#         encoded_line = []
+#         words = re.sub(r'(?<=[а-яА-Яa-zA-ZёЁ])([.,!?;:])', r' \1', line.lower().strip())
+#         for i, word in enumerate(words.split()):
+#             if re.match(r"^[а-яА-Яa-zA-ZёЁ\-]+$", word) and i > 0:
+#                 encoded_line.append(self.word2index.get(" ", 0))
+#             encoded_line.append(self.word2index.get(word, 0))
+#         encoded_line.append(self.word2index["\n"])
+#         return encoded_line
+#
+#     def __len__(self):
+#         return len(self.index2word)
+#
+#     def count_words(self):
+#         count = 0
+#         for _, words in self.word2count.items():
+#             count += words
+#         return count
+
+
 class WordDictionary:
     def __init__(self):
-        self.index2word = {0: " "}
+        self.index2word = {0: "<UNK>", 1: "<BOS>", 2: "<EOS>", 3:"<SEP>"}
         self.word2index = {letter: idx for idx, letter in self.index2word.items()}
         self.word2count = {letter: 0 for idx, letter in self.index2word.items()}
         self.word_index = len(self.index2word)
         self.delimiter = " "
 
     def add_line(self, sentence):
-        words = re.sub(r"([^a-zA-Zа-яА-Я])", r" \1 ", sentence.lower().strip())
-        for word in words.split():
-            self.add_word(word)
-            self.add_word("\n")
+        # words = re.sub(r"([^a-zA-Zа-яА-Яеё])", r" \1 ", sentence.lower().strip())
+        new_sentence = sentence.lower().strip()
+        if new_sentence.startswith("["):
+            self.add_word(new_sentence)
+        else:
+            words = re.sub(r'(?<=[а-яА-Яa-zA-ZёЁ])([.,!?;:])', r' \1', new_sentence)
+            for word in words.split():
+                if word.upper() in self.word2index:
+                    word = word.upper()
+                self.add_word(word)
+        self.add_word("<SEP>")
 
     def add_word(self, word):
         if word not in self.word2index:
@@ -85,23 +148,18 @@ class WordDictionary:
             for idx, letter in self.index2word.items():
                 file.write(f'{idx}{self.delimiter}{letter}\n')
 
-    # def load_dict(self, path="dict.txt"):
-    #     with open(path, "r", encoding='utf-8') as file:
-    #         for line in file:
-    #             print(line)
-    #             key_value = line.strip().split(self.delimiter)
-    #             if len(key_value) == 2:
-    #                 self.index2word[int(key_value[0])] = key_value[1]
-
     def convert_line_to_index(self, line: str) -> list:
+        new_line = line.lower().strip()
         encoded_line = []
-        words = re.sub(r"([^a-zA-Zа-яА-Я\[\]])", r" \1 ", line.lower().strip())
-        for word in words.split():
-            if word in string.punctuation and len(encoded_line) > 0:
-                encoded_line.pop()
-            encoded_line.append(self.word2index.get(word, 0))
-            encoded_line.append(0)
-        encoded_line.append(self.word2index["\n"])
+        if new_line.startswith("["):
+            encoded_line.append(self.word2index.get(new_line, 0))
+        else:
+            words = re.sub(r'(?<=[а-яА-Яa-zA-ZёЁ])([.,!?;:])', r' \1', new_line)
+            for word in words.split():
+                if word.upper() in self.word2index:
+                    word = word.upper()
+                encoded_line.append(self.word2index.get(word, 0))
+        encoded_line.append(self.word2index.get("<SEP>", 0))
         return encoded_line
 
     def __len__(self):
@@ -114,41 +172,6 @@ class WordDictionary:
         return count
 
 
-# class MyDataset(Dataset):
-#     def __init__(self, path, dictionary, seq_length, step=1):
-#         self.path = path
-#         self.dictionary = dictionary
-#         self.seq_length = seq_length
-#         self.step = step
-#
-#         self.len = self.__count_len()
-#         self.file = open(self.path, "r", encoding='utf-8')
-#
-#     def __count_len(self):
-#         size = 0
-#         with open(self.path, "r", encoding='utf-8') as file:
-#             for line in file:
-#                 size += len(line)
-#         return size
-#
-#     def __len__(self):
-#         return self.len
-#
-#     def __getitem__(self, idx):
-#         if idx == 0:
-#             self.file.close()
-#             self.file = open(self.path, "r", encoding='utf-8')
-#
-#         x_line = self.file.read(self.seq_length)
-#         y_line = x_line[self.step:] + self.file.read(self.step)
-#         x = self.dictionary.convert_line_to_index(x_line)
-#         y = self.dictionary.convert_line_to_index(y_line)
-#         # x = self.data[idx:idx + self.seq_length]
-#         # y = self.data[idx + 1:idx + self.seq_length + 1]
-#         x = F.pad(torch.tensor(x, dtype=torch.long), (0, self.seq_length - len(x)), value=0)
-#         y = F.pad(torch.tensor(y, dtype=torch.long), (0, self.seq_length - len(y)), value=0)
-#         print(idx, len(x), len(y))
-#         return x, y
 
 class MyDataset(Dataset):
     def __init__(self, path, dictionary, seq_length, step=1):

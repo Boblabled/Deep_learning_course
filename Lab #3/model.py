@@ -3,7 +3,7 @@ from torch import nn
 class MyModel(nn.Module):
     def __init__(self, vocab_size, embedding_size, hidden_size, num_layers):
         super(MyModel, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_size)
+        self.embedding = nn.Embedding(vocab_size, embedding_size, scale_grad_by_freq=True)
         self.gru = nn.GRU(embedding_size, hidden_size, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_size, vocab_size)
 

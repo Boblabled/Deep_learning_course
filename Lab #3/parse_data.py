@@ -22,6 +22,16 @@ class Album:
         self.__tracks.append(track)
 
 
+def send_request(func):
+    def wrapper(self, *args, **kwargs):
+        response = requests.get(url)
+        if response.status_code == 200:
+            result = func(self, *args, **kwargs)
+            return result
+        else:
+            print(f"Ошибка при загрузке страницы: {response.status_code}")
+
+
 def get_urls(url, class_name, key_word):
     urls = []
     response = requests.get(url)
@@ -68,22 +78,25 @@ def get_tracks_url(url, class_name, key_word):
 
 def get_track_info(track):
     lyrics_text = ""
-    name = ""
+    name = None
     response = requests.get(track)
     if response.status_code == 200:
+
         soup = BeautifulSoup(response.text, 'html.parser')
         name_span = soup.find('span', class_="SongHeader-desktop__HiddenMask-sc-9c2f20c9-11 cEehWv")
         if name_span:
             name = re.sub(r'[<>:"/\\|?*]', '', name_span.get_text())
         else:
-            print("Контейнер с менем не найден.")
-
+            print("Контейнер с именем не найден.")
         lyrics_divs = soup.find_all('div', class_='Lyrics__Container-sc-926d9e10-1 fEHzCI')
         if lyrics_divs:
+            lyrics_text = ""
             for div in lyrics_divs:
                 lyrics_text += div.get_text(separator="\n")  # separator добавляет переносы строк
+                lyrics_text +="\n"
         else:
             print("Контейнер с текстом не найден.")
+
     else:
         print(f"Ошибка при загрузке страницы: {response.status_code}")
     return name, lyrics_text
@@ -107,15 +120,16 @@ if __name__ == '__main__':
 
         for j, track in enumerate(album.get_tracks(), start=1):
             name, lyrics_text = get_track_info(track)
-            lyrics_text = re.sub(r"[^a-zA-Zа-яА-Я0-9\s.,!?\[\]]", "", lyrics_text)
-            lyrics_text = re.sub(r"[\[]", "\n[", lyrics_text)
-
-            filename = os.path.join(album_path, f"{name}.txt")
-            with open(filename, "w", encoding='utf-8') as file:
-                file.writelines(lyrics_text[1:])
+            lyrics_text = re.sub(r"[^a-zA-Zа-яА-Я0-9ёЁ\s.,\-!?\[\]]", "", lyrics_text)
+            lyrics_text = re.sub(r"[^\S\n]", " ", lyrics_text)
+            lyrics_text = re.sub(r"^(?=\[)", "\n", lyrics_text, flags=re.MULTILINE)
+            # if name is not None:
+            #     filename = os.path.join(album_path, f"{name}.txt")
+            #     with open(filename, "w", encoding='utf-8') as file:
+            #         file.write(lyrics_text)
 
             with open(os.path.join(dataset_path, file_name), "a", encoding='utf-8') as file:
-                file.writelines(lyrics_text)
+                file.write("\n".join(["<BOS>", *lyrics_text.split("\n")[2:], "<EOS>\n"]))
 
             print(f"    [{j}/{len(album.get_tracks())}] - {name}")
 

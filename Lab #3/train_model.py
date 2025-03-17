@@ -7,9 +7,9 @@ from dataset import LetterDictionary, MyDataset, WordDictionary
 from model import MyModel, initMyModel
 
 if __name__ == '__main__':
-    seq_length = 5
-    batch_size = 128
-    learning_rate = 0.001
+    seq_length = 10
+    batch_size = 512
+    learning_rate = 0.01
     num_epochs = 20
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
