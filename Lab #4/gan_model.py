@@ -14,7 +14,7 @@ class GeneratorGAN(nn.Module):
         )
 
     def forward(self, x):
-        return self.model(x)
+        return self.model(x).view(-1, 32, 32, 3)
 
 
 class DiscriminatorGAN(nn.Module):
@@ -32,4 +32,4 @@ class DiscriminatorGAN(nn.Module):
         )
 
     def forward(self, x):
-        return self.model(x)
+        return self.model(x.view(x.shape[0], -1))

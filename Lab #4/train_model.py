@@ -1,3 +1,4 @@
+import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from gan_model import GeneratorGAN, DiscriminatorGAN
@@ -14,17 +15,18 @@ if __name__ == '__main__':
     train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
     test_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
 
-    batch_size = 128
+    batch_size = 512
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     latent_dim = 100
-    hidden_dim =32*32
+    hidden_dim = 32*32
     generator = GeneratorGAN(latent_space=latent_dim, hidden_dim=hidden_dim)
     discriminator = DiscriminatorGAN(hidden_dim=hidden_dim)
 
-    num_epochs = 10
-    pl_model = LGAN(generator, discriminator, batch_size, latent_dim=latent_dim)
+    num_epochs = 100
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    pl_model = LGAN(generator, discriminator, latent_dim=latent_dim).to(device)
     trainer = L.Trainer(
         max_epochs=num_epochs,
         logger=L.pytorch.loggers.TensorBoardLogger(save_dir="./log_gan/"),

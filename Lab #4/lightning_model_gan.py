@@ -42,20 +42,25 @@ def visualization(log_dir):
     plt.show()
 
 
-def test_image(pair_gen, pairs, figsize=None):
-    if figsize:
-        plt.figure(figsize=figsize)
-    plt.scatter(pairs[:, 0], pairs[:, 1], label="real")
-    plt.scatter(pair_gen[:, 0], pair_gen[:, 1], label="generated")
-    plt.axis([-1, 1, 0, 1])
-    plt.legend()
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.grid()
+def visualize_images(tensors):
+    # Преобразуем тензор в формат (80, 3, 32, 32)
+
+    # Визуализируем первые два изображения
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    for i in range(2):
+        tensor = tensors[i]
+        if tensor.dim() == 3:
+            tensor = tensor.squeeze(1)
+        tensor = tensor.view(-1, 3, 32, 32)
+        tensor = (tensor - tensor.min()) / (tensor.max() - tensor.min())
+        img = tensor[0].cpu().detach().permute(1, 2, 0).numpy()
+        axes[i].imshow(img)
+        axes[i].axis('off')
     plt.show()
 
+
 class LGAN(L.LightningModule):
-    def __init__(self, generator, discriminator, batch_size, learning_rate=3e-4, betas=(0.9, 0.999), noise_in_place=False, latent_dim=10):
+    def __init__(self, generator, discriminator, betas=(0.9, 0.999), latent_dim=10):
         super().__init__()
         self.automatic_optimization = False  # for hand made settings
         self.generator = generator
@@ -63,22 +68,19 @@ class LGAN(L.LightningModule):
         self.criterion = nn.BCELoss()
         self.real_label = 1.0
         self.fake_label = 0.0
-        self.lr = learning_rate
         self.betas = betas
-        self.noise_in_place = noise_in_place
         self.latent_dim = latent_dim
-        self.batch_size = batch_size
 
 
     def configure_optimizers(self):
         opt_gen = torch.optim.Adam(
             self.generator.parameters(),
-            lr=self.lr,
+            lr=0.001,
             betas=self.betas,
         )
         opt_disc = torch.optim.Adam(
             self.discriminator.parameters(),
-            lr=self.lr,
+            lr=0.000025,
             betas=self.betas,
         )
         return [opt_gen, opt_disc], []
@@ -87,43 +89,36 @@ class LGAN(L.LightningModule):
         pass
 
     def training_step(self, batch, batch_idx):
-        if self.noise_in_place:  # for standart dataset
-            self.real_items, _ = batch
-            # noises = torch.randn(
-            #     (self.real_items.shape[0], self.latent_dim),
-            #     dtype=torch.float32,
-            # ).to(self.device)
-            noises = torch.randn((self.batch_size, self.latent_dim), dtype=torch.float32).to(self.device)
-        else:
-            self.real_items, noises = batch  # for heandmade dataset
+        self.real_items, _ = batch  # for heandmade dataset
         opt_gen, opt_disc = self.optimizers()
-
-        print(self.real_items.shape, noises.shape)
+        noises = torch.randn((self.real_items.shape[0], self.latent_dim), dtype=torch.float32).to(self.device)
+        real_label = torch.full(
+            size=(self.real_items.shape[0], 1),
+            fill_value=self.real_label,
+            dtype=torch.float,
+        ).to(self.device)
+        fake_label = torch.full(
+            size=(self.real_items.shape[0], 1),
+            fill_value=self.fake_label,
+            dtype=torch.float,
+        ).to(self.device)
 
         # ---------------------
         # Train discriminator
         # ---------------------
         self.discriminator.zero_grad()
         # 1. discriminator on real items
-        real_label = torch.full(
-            size=(self.real_items.shape[0], 1),
-            fill_value=self.real_label,
-            dtype=torch.float,
-        ).to(self.device)
         disc_label = self.discriminator(self.real_items)
         loss_disc_real = self.criterion(disc_label, real_label)
-        loss_disc_real.backward()
+        # loss_disc_real.backward()
 
         # 2. discriminator on fake items
-        fake_label = torch.full(
-            size=(self.real_items.shape[0], 1),
-            fill_value=self.fake_label,
-            dtype=torch.float,
-        ).to(self.device)
         self.fake_items = self.generator(noises)
         disc_label = self.discriminator(self.fake_items)
         loss_disc_fake = self.criterion(disc_label, fake_label)
-        loss_disc_fake.backward()
+        # loss_disc_fake.backward()
+        loss_disc = loss_disc_fake + loss_disc_real
+        loss_disc.backward()
 
         # 3. discriminator optimizer step (on real and fake items)
         opt_disc.step()
@@ -142,21 +137,12 @@ class LGAN(L.LightningModule):
         opt_gen.step()
         self.log("loss/gen", loss_gen, on_epoch=False, on_step=True)
 
-        if (batch_idx + 1) % 1000 == 0:
-            visualization(self.logger.log_dir)
-            test_image(
-                self.fake_items.detach().cpu().numpy(),
-                self.real_items.detach().cpu().numpy(),
-                figsize=(12, 3.5),
-            )
-
     def on_train_epoch_end(self):
+        visualize_images([self.real_items, self.fake_items])
         visualization(self.logger.log_dir)
-        test_image(
-            self.fake_items.detach().cpu().numpy(),
-            self.real_items.detach().cpu().numpy(),
-            figsize=(12, 3.5),
-        )
+        torch.save(self.generator.state_dict(),f"{self.generator.__class__.__name__}_weights.pth")
+        torch.save(self.discriminator.state_dict(), f"{self.discriminator.__class__.__name__}_weights.pth")
+
 
     def on_validation_epoch_start(self):
         # called only if validation_step implemented
