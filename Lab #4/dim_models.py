@@ -1,8 +1,8 @@
 import torch.nn as nn
 
 class Generator(nn.Module):
-    def init(self, z_dim, ngf, nc):
-        super(Generator, self).init()
+    def __init__(self, z_dim, ngf, nc):
+        super(Generator, self).__init__()
         self.main = nn.Sequential(
             # Вход: (z_dim, 1, 1) -> (ngf*4, 4, 4)
             nn.ConvTranspose2d(z_dim, ngf*4, 4, 1, 0, bias=False),
@@ -28,8 +28,8 @@ class Generator(nn.Module):
         return self.main(z)
 
 class Discriminator(nn.Module):
-    def init(self, nc, ndf):
-        super(Discriminator, self).init()
+    def __init__(self, nc, ndf):
+        super(Discriminator, self).__init__()
         self.main = nn.Sequential(
             # (nc, 32, 32) -> (ndf, 16, 16)
             nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
