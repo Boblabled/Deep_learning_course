@@ -1,5 +1,9 @@
+import os
+
 import lightning as L
+import numpy as np
 import torch
+import torchvision
 from matplotlib import pyplot as plt
 from tbparse import SummaryReader
 from IPython.display import clear_output
@@ -58,6 +62,15 @@ def visualize_images(tensors):
         axes[i].axis('off')
     plt.show()
 
+def visualise_predictions(model, prediction, N, path):
+    grid = torchvision.utils.make_grid(prediction.cpu(), nrow=N, normalize=True)
+    plt.figure(figsize=(N, N))
+    plt.imshow(np.transpose(grid.numpy(), (1, 2, 0)))
+    plt.title(f"Generated images ({model.__class__.__name__}), seed={torch.initial_seed()}")
+    plt.axis("off")
+    plt.savefig(path)
+    plt.show()
+
 
 class LGAN(L.LightningModule):
     def __init__(self, generator, discriminator, lr=0.0002, betas=(0.9, 0.999), latent_dim=10):
@@ -71,6 +84,7 @@ class LGAN(L.LightningModule):
         self.__lr = lr
         self.__betas = betas
         self.__latent_dim = latent_dim
+        self.__fixed_noise = None
 
 
     def configure_optimizers(self):
@@ -131,7 +145,12 @@ class LGAN(L.LightningModule):
         self.log("loss/gen", loss_gen, on_epoch=False, on_step=True)
 
     def on_train_epoch_end(self):
-        visualize_images([self.real_items, self.fake_items])
+        # visualize_images([self.real_items, self.fake_items])
+        N = 8
+        if self.__fixed_noise is None:
+            self.__fixed_noise = torch.randn((N**2, self.__latent_dim), dtype=torch.float32).to(self.device)
+            os.makedirs(os.path.join(self.logger.log_dir, "result"), exist_ok=True)
+        visualise_predictions(self.__generator, self.__generator(self.__fixed_noise), N, os.path.join(self.logger.log_dir, "result", f"Generation_result_{self.current_epoch}"))
         visualization(self.logger.log_dir)
         torch.save(self.__generator.state_dict(), f"{self.__generator.__class__.__name__}_weights.pth")
         torch.save(self.__discriminator.state_dict(), f"{self.__discriminator.__class__.__name__}_weights.pth")

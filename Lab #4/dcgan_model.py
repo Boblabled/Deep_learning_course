@@ -36,10 +36,68 @@ class GeneratorDCGAN(nn.Module):
         return img
 
 
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(),
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(in_channels),
+        )
+
+    def forward(self, x):
+        return x + self.block(x)  # Остаточное соединение
+
+
+class UpsampleBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(),
+        )
+
+    def forward(self, x):
+        return self.block(x)
+
+
+class ImprovedGenerator(nn.Module):
+    def __init__(self, latent_dim, img_size, channels, features):
+        super().__init__()
+        self.init_size = img_size // 2 ** 2
+
+        self.l1 = nn.Sequential(
+            nn.Linear(latent_dim, features * self.init_size**2),
+            nn.LeakyReLU(0.2),
+        )
+
+        self.conv_blocks = nn.Sequential(
+            UpsampleBlock(features, features // 2),
+            ResidualBlock(features // 2),
+            UpsampleBlock(features // 2, features // 4),
+            ResidualBlock(features // 4),
+            nn.Conv2d(features // 4, channels, kernel_size=3, stride=1, padding=1),
+            nn.Tanh(),
+        )
+
+    def forward(self, z):
+        out = self.l1(z)
+        out = out.view(out.shape[0], -1, self.init_size, self.init_size)
+        img = self.conv_blocks(out)
+        return img
+
+
+
 class DiscriminatorBlock(nn.Module):
     def __init__(self, in_channel, out_channel, bn=True):
         super().__init__()
         block = [
+            # spectral_norm(nn.Conv2d(in_channel, out_channel, kernel_size=4, stride=2, padding=1)),
+            # nn.LeakyReLU(0.2),
             nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=2, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout2d(0.25),
